@@ -1,0 +1,50 @@
+#define _REENTRANT
+#include <stdio.h>  /* incloure definicions de funcions estandard */
+#include <stdlib.h> /* per exit() */
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>    /* per getpid() */
+#include "winsuport2.h" /* incloure definicions de funcions propies */
+#include <pthread.h>
+#include <time.h>
+#include "memoria.h"
+
+#define MIN_FIL 7 /* definir limits de variables globals */
+#define MAX_FIL 25
+#define MIN_COL 10
+#define MAX_COL 80
+
+#define MAX_PROCS 10 /*Declarem la constant maxima de threads*/
+#define MAX_FAN (MAX_PROCS - 1)
+
+
+
+typedef struct
+{            /* per un objecte (menjacocos o fantasma) */
+    int f;   /* posicio actual: fila */
+    int c;   /* posicio actual: columna */
+    int d;   /* direccio actual: [0..3] */
+    float r; /* per indicar un retard relati */
+    char a;  /* caracter anterior en pos. actual */
+} objecte;
+
+/* variables globals */
+int n_fil1, n_col; /* dimensions del camp de joc */
+char tauler[70];   /* nom del fitxer amb el laberint de joc */
+char c_req;        /* caracter de pared del laberint */
+
+char a1[20], a2[20], a3[20], a4[20], a5[20];
+objecte mc;
+int p;
+int num_fan;
+int df[] = {-1, 0, 1, 0}; /* moviments de les 4 direccions possibles*/
+int dc[] = {0, -1, 0, 1}; /* dalt, esquerra, baix, dreta*/
+objecte f1 [MAX_FAN];
+
+/* Variables amb memòria compartida */
+int id_retard, *retard, n_retard;
+int id_fi1, *fi1, n_fi1;
+int id_fi2, *fi2, n_fi2;
+int id_cocos, *cocos, n_cocos;
+void *p_win;
+int id_win;

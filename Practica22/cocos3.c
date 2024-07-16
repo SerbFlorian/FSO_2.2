@@ -1,0 +1,380 @@
+#include "estructura.h"
+
+
+pid_t tid[MAX_PROCS];
+
+/* funcio per realitzar la carrega dels parametres de joc emmagatzemats */
+/* dins d'un fitxer de text, el nom del qual es passa per referencia a  */
+/* 'nom_fit'; si es detecta algun problema, la funcio avorta l'execucio */
+/* enviant un missatge per la sortida d'error i retornant el codi per-	*/
+/* tinent al SO (segons comentaris al principi del programa).		    */
+void carrega_parametres(const char *nom_fit)
+{
+    int i = 1;
+    FILE *fit;
+
+    fit = fopen(nom_fit, "rt"); /* intenta obrir fitxer */
+    if (fit == NULL)
+    {
+        fprintf(stderr, "No s'ha pogut obrir el fitxer \'%s\'\n", nom_fit);
+        exit(2);
+    }
+
+    if (!feof(fit))
+        fscanf(fit, "%d %d %s %c\n", &n_fil1, &n_col, tauler, &c_req);
+    else
+    {
+        fprintf(stderr, "Falten parametres al fitxer \'%s\'\n", nom_fit);
+        fclose(fit);
+        exit(2);
+    }
+    if ((n_fil1 < MIN_FIL) || (n_fil1 > MAX_FIL) ||
+        (n_col < MIN_COL) || (n_col > MAX_COL))
+    {
+        fprintf(stderr, "Error: dimensions del camp de joc incorrectes:\n");
+        fprintf(stderr, "\t%d =< n_fil1 (%d) =< %d\n", MIN_FIL, n_fil1, MAX_FIL);
+        fprintf(stderr, "\t%d =< n_col (%d) =< %d\n", MIN_COL, n_col, MAX_COL);
+        fclose(fit);
+        exit(3);
+    }
+
+    if (!feof(fit))
+        fscanf(fit, "%d %d %d %f\n", &mc.f, &mc.c, &mc.d, &mc.r);
+    else
+    {
+        fprintf(stderr, "Falten parametres al fitxer \'%s\'\n", nom_fit);
+        fclose(fit);
+        exit(2);
+    }
+    if ((mc.f < 1) || (mc.f > n_fil1 - 3) ||
+        (mc.c < 1) || (mc.c > n_col - 2) ||
+        (mc.d < 0) || (mc.d > 3))
+    {
+        fprintf(stderr, "Error: parametres menjacocos incorrectes:\n");
+        fprintf(stderr, "\t1 =< mc.f (%d) =< n_fil1-3 (%d)\n", mc.f, (n_fil1 - 3));
+        fprintf(stderr, "\t1 =< mc.c (%d) =< n_col-2 (%d)\n", mc.c, (n_col - 2));
+        fprintf(stderr, "\t0 =< mc.d (%d) =< 3\n", mc.d);
+        fclose(fit);
+        exit(4);
+    }
+    fscanf(fit, "%d %d %d %f\n", &f1[0].f, &f1[0].c, &f1[0].d, &f1[0].r);
+    while (!feof(fit))
+    {
+        fscanf(fit, "%d %d %d %f\n", &f1[i].f, &f1[i].c, &f1[i].d, &f1[i].r);
+    	i++;
+    }
+    num_fan = i;
+    /*if (feof(fit))
+    {
+        fprintf(stderr, "Falten parametres al fitxer \'%s\'\n", nom_fit);
+        fclose(fit);
+        exit(2);
+    }*/
+    i = 1;
+    if ((f1[i].f < 1) || (f1[i].f > n_fil1 - 3) ||
+        (f1[i].c < 1) || (f1[i].c > n_col - 2) ||
+        (f1[i].d < 0) || (f1[i].d > 3))
+    {
+        fprintf(stderr, "Error: parametres fantasma 1 incorrectes:\n");
+        fprintf(stderr, "\t1 =< f1.f (%d) =< n_fil1-3 (%d)\n", f1[i].f, (n_fil1 - 3));
+        fprintf(stderr, "\t1 =< f1.c (%d) =< n_col-2 (%d)\n", f1[i].c, (n_col - 2));
+        fprintf(stderr, "\t0 =< f1.d (%d) =< 3\n", f1[i].d);
+        fclose(fit);
+        exit(5);
+    }
+    fclose(fit); /* fitxer carregat: tot OK! */
+    printf("Joc del MenjaCocos\n\tTecles: \'%c\', \'%c\', \'%c\', \'%c\', RETURN-> sortir\n",
+           TEC_AMUNT, TEC_AVALL, TEC_DRETA, TEC_ESQUER);
+    printf("prem una tecla per continuar:\n");
+    getchar();
+}
+
+/* funcio per inicialitar les variables i visualitzar l'estat inicial del joc */
+void inicialitza_joc(void)
+{
+    int r, i, j, w;
+    char strin[12];
+
+    r = win_carregatauler(tauler, n_fil1 - 1, n_col, c_req);
+    if (r == 0)
+    {
+        mc.a = win_quincar(mc.f, mc.c);
+        if (mc.a == c_req)
+            r = -6; /* error: menjacocos sobre pared */
+        else
+        {
+            for (w = 0; w < num_fan; w++)
+	    {
+            f1[w].a = win_quincar(f1[w].f, f1[w].c);
+            if (f1[w].a == c_req)
+                r = -7; /* error: fantasma sobre pared */
+            else
+            {
+                cocos = 0; /* compta el numero total de cocos */
+                for (i = 0; i < n_fil1 - 1; i++)
+                    for (j = 0; j < n_col; j++)
+                        if (win_quincar(i, j) == '.')
+                            cocos++;
+                win_escricar(mc.f, mc.c, '0', NO_INV);
+                win_escricar(f1[w].f, f1[w].c, '1', NO_INV);
+
+                if (mc.a == '.')
+                    cocos--; /* menja primer coco */
+
+                sprintf(strin, "Cocos: %d", cocos);
+                win_escristr(strin);
+            }
+            }
+        }
+    }
+    if (r != 0)
+    {
+        win_fi();
+        fprintf(stderr, "Error: no s'ha pogut inicialitzar el joc:\n");
+        switch (r)
+        {
+        case -1:
+            fprintf(stderr, "  nom de fitxer erroni\n");
+            break;
+        case -2:
+            fprintf(stderr, "  numero de columnes d'alguna fila no coincideix amb l'amplada del tauler de joc\n");
+            break;
+        case -3:
+            fprintf(stderr, "  numero de columnes del laberint incorrecte\n");
+            break;
+        case -4:
+            fprintf(stderr, "  numero de files del laberint incorrecte\n");
+            break;
+        case -5:
+            fprintf(stderr, "  finestra de camp de joc no oberta\n");
+            break;
+        case -6:
+            fprintf(stderr, "  posicio inicial del menjacocos damunt la pared del laberint\n");
+            break;
+        case -7:
+            fprintf(stderr, "  posicio inicial del fantasma damunt la pared del laberint\n");
+            break;
+        }
+        exit(7);
+    }
+}
+
+
+/* funcio per moure el menjacocos una posicio, en funcio de la direccio de   */
+/* moviment actual; retorna -1 si s'ha premut RETURN, 1 si s'ha menjat tots  */
+/* els cocos, i 0 altrament */
+void *mou_menjacocos(void *null)
+{
+    char strin[12];
+    objecte seg;
+    int tec, ret;
+
+    ret = 0;
+
+    do
+    {
+	win_retard(*retard);
+        //pthread_mutex_lock(&mutex);
+        tec = win_gettec();
+        //pthread_mutex_unlock(&mutex);
+        if (tec != 0)
+        {
+            switch (tec) /* modificar direccio menjacocos segons tecla */
+            {
+            case TEC_AMUNT:
+                mc.d = 0;
+		break;
+            case TEC_ESQUER:
+                mc.d = 1;
+                break;
+            case TEC_AVALL:
+                mc.d = 2;
+                break;
+            case TEC_DRETA:
+                mc.d = 3;
+                break;
+            case TEC_RETURN:
+                ret = -1;
+                break;
+	    }
+        }
+
+	*fi1 = ret;
+
+	//pthread_mutex_lock(&mutex);
+	seg.f = mc.f + df[mc.d]; /* calcular seguent posicio */
+        seg.c = mc.c + dc[mc.d];
+	seg.a = win_quincar(seg.f, seg.c); /* calcular caracter seguent posicio */
+        //pthread_mutex_unlock(&mutex);
+	if ((seg.a == ' ') || (seg.a == '.'))
+        {
+            //pthread_mutex_lock(&mutex);
+            win_escricar(mc.f, mc.c, ' ', NO_INV); /* esborra posicio anterior */
+            //pthread_mutex_unlock(&mutex);
+	    //pthread_mutex_lock(&mutex);
+	    mc.f = seg.f;
+            mc.c = seg.c;                          /* actualitza posicio */
+	    win_escricar(mc.f, mc.c, '0', NO_INV); /* redibuixa menjacocos */
+            //pthread_mutex_unlock(&mutex);
+	    if (seg.a == '.')
+            {
+                cocos--;
+                sprintf(strin, "Cocos: %d", cocos);
+		win_escristr(strin);
+                if (cocos == 0)
+		{
+                    *fi2 = 1;
+	        }
+	    }
+        }
+    //p++;
+    }while (!*fi1 && !*fi2);
+}
+
+/* programa principal				    */
+int main(int n_args, const char *ll_args[])
+{
+    int temps_total = 0;
+    time_t begin = time(NULL);
+    int i, t, t_total, rc; /* variables locals */
+    int num;
+    void *p_win;
+
+    n_fi1 = atoi(ll_args[2]);
+    n_fi2 = atoi(ll_args[3]);
+
+    if (n_fi1 < 1) n_fi1 = 0;
+    if (n_fi1 > 1) n_fi1 = 1;
+    if (n_fi2 < 1) n_fi2 = 0;
+    if (n_fi2 < 1) n_fi2 = 1;
+
+    id_retard = ini_mem(sizeof(int));
+    retard = map_mem(id_retard);
+    *retard = n_retard;
+    sprintf(a2, "%i", id_retard);
+
+    id_fi1 = ini_mem(sizeof(int));
+    fi1 = map_mem(id_fi1);
+    *fi1 = n_fi1;
+    sprintf(a2, "%i", id_fi1);
+
+    id_fi2 = ini_mem(sizeof(int));
+    fi2 = map_mem(id_fi2);
+    *fi2 = n_fi2;
+    sprintf(a2, "%i", id_fi2);
+
+    //pthread_mutex_init(&mutex, NULL);
+
+    srand(getpid()); /* inicialitza numeros aleatoris */
+    t = 0;
+    if ((n_args != 2) && (n_args != 3))
+    {
+        fprintf(stderr, "Comanda: cocos0 fit_param [retard]\n");
+        exit(1);
+    }
+    carrega_parametres(ll_args[1]);
+
+    if (n_args == 3)
+        *retard = atoi(ll_args[4]);
+    else
+        *retard = 100;
+
+    rc = win_ini(&n_fil1, &n_col, '+', INVERS); /* intenta crear taulell */
+    id_win = ini_mem(sizeof(70));
+    p_win = map_mem(id_win);
+    sprintf(a3, "%i", id_win);
+    sprintf(a4, "%i", n_fil1);
+    sprintf(a5, "%i", n_col);
+    win_set(p_win, n_fil1, n_col);
+    //fprintf(stderr,"\n\n\n\n%d", id_win);
+    if (rc > 0)                                /* si aconsegueix accedir a l'entorn CURSES */
+    {
+        inicialitza_joc();
+        //p = 0;
+        *fi1 = 0;
+        *fi2 = 0;
+	win_retard(*retard);
+	num = 0;
+	pthread_create(&tid[0], NULL, mou_menjacocos, (void *)(intptr_t)0);
+	pthread_join(tid[i], (void **)&t);
+	for (i = 0; i < num_fan; i++)
+	{
+		//fprintf(stderr, "1. Abans fork\n");
+		tid[num] = fork();      /* crea un nou proces */
+        	//fprintf(stderr, "1. Despres fork\n");
+		if (tid[num] == (pid_t) 0)
+        	{
+                	sprintf(a1, "%i", (i+1));
+			//fprintf(stderr, "1. Abans de Execlp\n");
+			execlp("./fantasma3", "fantasma3", a1, ll_args, a2, a3, a4, a5, num_fan, f1, dc, df, (char *)0);
+			//fprintf(stderr, "1. Despres de Execlp\n");
+			win_update();
+			exit(0);
+        	}
+		else if (tid[num] > 0) num++;
+	}
+	//pthread_create(&tid[0], NULL, mou_menjacocos, (void *)(intptr_t)0);
+        num = 0;
+	//pthread_mutex_init(&mutex, NULL);
+	//pthread_create(&tid[1], NULL, mou_fantasma, (void *)(intptr_t)0);
+
+        for (i = 0; i <= num; i++)
+        {
+	    waitpid(tid[i], &t, NULL);
+	    t = t >> 8;
+	    pthread_join(tid[i], (void **)&t);
+            t_total += t;
+        }
+
+        /*for (int i = 0; i <= num_fan; i++)
+        {
+            pthread_join(tid[i], (void **)&t);
+            t_total += t;
+        }*/
+
+        win_fi();
+
+        if (*fi1 == -1)
+            printf("S'ha aturat el joc amb tecla RETURN!\n");
+        else
+        {
+            if (*fi1){
+                printf("Ha guanyat l'ordinador!\n");
+		printf("Han faltat %d cocos ha menjar\n", cocos);
+            }
+	    else
+                printf("Ha guanyat l'usuari!\n");
+        }
+	win_retard(*retard);
+    }
+    else
+    {
+        fprintf(stderr, "Error: no s'ha pogut crear el taulell:\n");
+        switch (rc)
+        {
+        case -1:
+            fprintf(stderr, "camp de joc ja creat!\n");
+            break;
+        case -2:
+            fprintf(stderr, "no s'ha pogut inicialitzar l'entorn de curses!\n");
+            break;
+        case -3:
+            fprintf(stderr, "les mides del camp demanades son massa grans!\n");
+            break;
+        case -4:
+            fprintf(stderr, "no s'ha pogut crear la finestra!\n");
+            break;
+        }
+        exit(6);
+    }
+
+    //pthread_mutex_destroy(&mutex);
+    elim_mem(id_retard);		/* Eliminem zona memoria compartida */
+    elim_mem(id_fi1);
+    elim_mem(id_fi2);
+    elim_mem(id_win);
+    time_t end = time(NULL);
+    temps_total += (int)(end - begin);
+    printf("El joc ha tardat %d segons\n", temps_total);
+    return (0);
+}
